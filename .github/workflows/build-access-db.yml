@@ -25,16 +25,33 @@ jobs:
     - name: Check if Access Database Engine (ACCDB) is installed
       id: check_driver
       run: |
-        $drivers = Get-OdbcDriver | Select-Object -ExpandProperty Name
-        $hasAccdbOdbc = $drivers -contains "Microsoft Access Driver (*.mdb, *.accdb)"
-        if ($hasAccdbOdbc) {
-          Write-Host "Found ODBC driver: Microsoft Access Driver (*.mdb, *.accdb)"
+        $ErrorActionPreference = "Stop"
+        $drivers = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))"
+        Write-Host "pyodbc.drivers():"
+        if ($drivers) {
+          $drivers.Split(\"`n\") | ForEach-Object { Write-Host \" - $_\" }
+        } else {
+          Write-Host " - (none)"
+        }
+        $hasAccdb = $false
+        if ($drivers) {
+          $hasAccdb = $drivers.ToLower().Contains(\"accdb\")
+        }
+        if ($hasAccdb) {
+          Write-Host "Found an ACCDB-capable ODBC driver (name contains 'accdb')."
           Write-Host "accdb_driver_installed=true" >> $env:GITHUB_OUTPUT
         } else {
-          Write-Host "ACCDB-capable Access ODBC driver not found. Present drivers:"
-          $drivers | ForEach-Object { Write-Host " - $_" }
+          Write-Host "No ACCDB-capable ODBC driver found."
           Write-Host "accdb_driver_installed=false" >> $env:GITHUB_OUTPUT
         }
+
+    - name: Debug ODBC drivers (registry)
+      run: |
+        $ErrorActionPreference = "Continue"
+        Write-Host "=== 64-bit ODBC Drivers ==="
+        reg query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\ODBC Drivers" /s
+        Write-Host "=== 32-bit ODBC Drivers (WOW6432Node) ==="
+        reg query "HKLM\SOFTWARE\WOW6432Node\ODBC\ODBCINST.INI\ODBC Drivers" /s
 
     - name: Install Microsoft Access Database Engine
       if: steps.check_driver.outputs.accdb_driver_installed == 'false'
