@@ -232,7 +232,7 @@ def load_seed_data(conn):
             if not row.get("PlanName"):
                 continue
             cursor.execute(
-                "INSERT INTO WorkoutPlans (PlanName, GoalType, Level) VALUES (?, ?, ?)",
+                "INSERT INTO WorkoutPlans (PlanName, GoalType, [Level]) VALUES (?, ?, ?)",
                 [
                     row["PlanName"],
                     _blank_to_none(row.get("GoalType")),

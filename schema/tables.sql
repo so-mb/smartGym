@@ -51,7 +51,7 @@ CREATE TABLE WorkoutPlans (
     PlanTemplateID AUTOINCREMENT PRIMARY KEY,
     PlanName TEXT(100),
     GoalType TEXT(50),
-    Level TEXT(30)
+    [Level] TEXT(30)
 );
 
 CREATE TABLE PlanExercises (
