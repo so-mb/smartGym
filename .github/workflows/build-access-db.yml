@@ -17,12 +17,13 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        architecture: 'x86'
 
     - name: Install Python dependencies
       run: |
         pip install pyodbc pywin32 msaccessdb
 
-    - name: Check if Access Database Engine (ACCDB) is installed
+    - name: Check if Access ODBC driver is available
       id: check_driver
       run: |
         $ErrorActionPreference = "Stop"
@@ -33,16 +34,12 @@ jobs:
         } else {
           Write-Host " - (none)"
         }
-        $hasAccdb = $false
-        if ($drivers) {
-          $hasAccdb = $drivers.ToLower().Contains("accdb")
-        }
-        if ($hasAccdb) {
-          Write-Host "Found an ACCDB-capable ODBC driver (name contains 'accdb')."
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "accdb_driver_installed=true"
+        $hasMdb = $false
+        if ($drivers) { $hasMdb = $drivers.ToLower().Contains("*.mdb") -or $drivers.ToLower().Contains("access") }
+        if ($hasMdb) {
+          Write-Host "Found an Access ODBC driver (sufficient for .mdb build)."
         } else {
-          Write-Host "No ACCDB-capable ODBC driver found."
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "accdb_driver_installed=false"
+          throw "No Access ODBC driver detected by pyodbc. This runner cannot build even .mdb via ODBC."
         }
 
     - name: Debug ODBC drivers (registry)
@@ -53,73 +50,8 @@ jobs:
         Write-Host "=== 32-bit ODBC Drivers (WOW6432Node) ==="
         reg query "HKLM\SOFTWARE\WOW6432Node\ODBC\ODBCINST.INI\ODBC Drivers" /s
 
-    - name: Install Microsoft Access Database Engine
-      if: steps.check_driver.outputs.accdb_driver_installed == 'false'
-      run: |
-        $ErrorActionPreference = "Stop"
-        Write-Host "Installing Access Database Engine (ACE) for *.accdb support..."
-
-        # Prefer winget because Microsoft direct links are brittle (and often 404 over time).
-        $winget = Get-Command winget -ErrorAction SilentlyContinue
-        if ($winget) {
-          Write-Host "winget detected. Searching for Access Database Engine..."
-          try {
-            $json = winget search "Access Database Engine" --source winget --output json | Out-String
-            $data = $json | ConvertFrom-Json
-            $pkg = $data.Data | Where-Object { $_.Name -match "Access Database Engine" } | Select-Object -First 1
-            if ($pkg -and $pkg.Id) {
-              Write-Host "Installing via winget: $($pkg.Name) ($($pkg.Id))"
-              winget install --id $pkg.Id --silent --accept-package-agreements --accept-source-agreements
-            } else {
-              Write-Host "winget search returned no matching package; falling back to direct download."
-              throw "winget package not found"
-            }
-          } catch {
-            Write-Host "winget install failed: $_"
-          }
-        } else {
-          Write-Host "winget not available; falling back to direct download."
-        }
-
-        # Re-check after winget attempt (use pyodbc, since that's what build.py uses)
-        python -c "import pyodbc; print('pyodbc.drivers() AFTER install:\\n' + '\\n'.join(pyodbc.drivers()))"
-        $driversAfterPy = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))"
-        if ($driversAfterPy -and $driversAfterPy.ToLower().Contains('accdb')) {
-          Write-Host "ACCDB-capable ODBC driver is now installed."
-          exit 0
-        }
-
-        Write-Host "Attempting direct download install as fallback..."
-        $urls = @(
-          "https://download.microsoft.com/download/3/5/C/35C84A0E-DC6E-4EBC-AE0B-1D3B78B99A4A/accessdatabaseengine_X64.exe",
-          "https://download.microsoft.com/download/3/5/C/35C84A0E-DC6E-4EBC-AE0B-1D3B78B99A4A/AccessDatabaseEngine_X64.exe",
-          "https://www.microsoft.com/en-us/download/confirmation.aspx?id=54920"
-        )
-        $downloaded = $false
-        foreach ($url in $urls) {
-          try {
-            Write-Host "Trying URL: $url"
-            Invoke-WebRequest -Uri $url -OutFile AccessDatabaseEngine.exe -ErrorAction Stop
-            $downloaded = $true
-            break
-          } catch {
-            Write-Host "Failed: $_"
-          }
-        }
-        if (-not $downloaded) { throw "Could not download Access Database Engine." }
-
-        Write-Host "Installing Access Database Engine..."
-        $p = Start-Process -FilePath .\AccessDatabaseEngine.exe -ArgumentList "/quiet" -Wait -PassThru
-        Write-Host "Installer exit code: $($p.ExitCode)"
-
-        python -c "import pyodbc; print('pyodbc.drivers() FINAL:\\n' + '\\n'.join(pyodbc.drivers()))"
-        $driversFinalPy = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))"
-        if ($driversFinalPy -and $driversFinalPy.ToLower().Contains('accdb')) {
-          Write-Host "ACCDB-capable ODBC driver installed successfully."
-        } else {
-          Write-Host "Still missing ACCDB driver after install."
-          throw "ACCDB-capable ODBC driver not installed (pyodbc still can't see any driver containing 'accdb')."
-        }
+    # NOTE: Microsoft Access Database Engine 2016 download is deprecated/removed.
+    # We generate a .mdb with 32-bit Python, matching the built-in 32-bit Access ODBC drivers on runners.
 
     - name: Build Access database
       run: |
@@ -128,14 +60,14 @@ jobs:
 
     - name: Verify database file exists
       run: |
-        if (-not (Test-Path "smart_gym.accdb")) {
+        if (-not (Test-Path "smart_gym.mdb")) {
           Write-Error "Database file was not created!"
           exit 1
         }
-        Write-Host "Database file created successfully: $(Get-Item smart_gym.accdb | Select-Object -ExpandProperty Length) bytes"
+        Write-Host "Database file created successfully: $(Get-Item smart_gym.mdb | Select-Object -ExpandProperty Length) bytes"
 
     - name: Upload Access database artifact
       uses: actions/upload-artifact@v4
       with:
         name: smart-gym-access-db
-        path: smart_gym.accdb
+        path: smart_gym.mdb

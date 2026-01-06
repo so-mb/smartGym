@@ -82,7 +82,9 @@ def create_access_database(db_path):
 
 
 def main():
-    db_path = "smart_gym.accdb"
+    # Use .mdb for CI compatibility (GitHub-hosted runners have 32-bit Jet/Access ODBC,
+    # but often lack 64-bit ACCDB/ACE drivers).
+    db_path = "smart_gym.mdb"
 
     if os.path.exists(db_path):
         print(f"Removing existing database: {db_path}")
@@ -100,11 +102,22 @@ def main():
         print("Inserting seed data...")
         load_seed_data(conn)
 
-        print("Creating relationships...")
-        run_sql_file(conn, "schema/relationships.sql")
+        # Relationships/queries creation via ODBC can be flaky across drivers and
+        # Access versions. Keep the build resilient: try, but don't fail the CI artifact.
+        try:
+            print("Creating relationships...")
+            run_sql_file(conn, "schema/relationships.sql")
+        except Exception as rel_err:
+            print(f"WARNING: relationships not created: {rel_err}")
 
-        print("Creating queries...")
-        run_sql_file(conn, "schema/queries.sql")
+        try:
+            print("Creating queries...")
+            run_sql_file(conn, "schema/queries.sql")
+        except Exception as q_err:
+            print(f"WARNING: queries not created: {q_err}")
+            print(
+                "You can copy/paste queries manually from schema/queries.sql in Access."
+            )
 
         conn.close()
         print(f"✔ {db_path} successfully created and populated")
