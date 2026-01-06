@@ -39,10 +39,10 @@ jobs:
         }
         if ($hasAccdb) {
           Write-Host "Found an ACCDB-capable ODBC driver (name contains 'accdb')."
-          Write-Host "accdb_driver_installed=true" >> $env:GITHUB_OUTPUT
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "accdb_driver_installed=true"
         } else {
           Write-Host "No ACCDB-capable ODBC driver found."
-          Write-Host "accdb_driver_installed=false" >> $env:GITHUB_OUTPUT
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "accdb_driver_installed=false"
         }
 
     - name: Debug ODBC drivers (registry)
@@ -81,9 +81,10 @@ jobs:
           Write-Host "winget not available; falling back to direct download."
         }
 
-        # Re-check after winget attempt
-        $driversAfter = Get-OdbcDriver | Select-Object -ExpandProperty Name
-        if ($driversAfter -contains "Microsoft Access Driver (*.mdb, *.accdb)") {
+        # Re-check after winget attempt (use pyodbc, since that's what build.py uses)
+        python -c "import pyodbc; print('pyodbc.drivers() AFTER install:\\n' + '\\n'.join(pyodbc.drivers()))"
+        $driversAfterPy = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))"
+        if ($driversAfterPy -and $driversAfterPy.ToLower().Contains('accdb')) {
           Write-Host "ACCDB-capable ODBC driver is now installed."
           exit 0
         }
@@ -111,13 +112,13 @@ jobs:
         $p = Start-Process -FilePath .\AccessDatabaseEngine.exe -ArgumentList "/quiet" -Wait -PassThru
         Write-Host "Installer exit code: $($p.ExitCode)"
 
-        $driversFinal = Get-OdbcDriver | Select-Object -ExpandProperty Name
-        if ($driversFinal -contains "Microsoft Access Driver (*.mdb, *.accdb)") {
+        python -c "import pyodbc; print('pyodbc.drivers() FINAL:\\n' + '\\n'.join(pyodbc.drivers()))"
+        $driversFinalPy = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))"
+        if ($driversFinalPy -and $driversFinalPy.ToLower().Contains('accdb')) {
           Write-Host "ACCDB-capable ODBC driver installed successfully."
         } else {
-          Write-Host "Still missing ACCDB driver after install. Drivers now:"
-          $driversFinal | ForEach-Object { Write-Host " - $_" }
-          throw "ACCDB-capable ODBC driver not installed."
+          Write-Host "Still missing ACCDB driver after install."
+          throw "ACCDB-capable ODBC driver not installed (pyodbc still can't see any driver containing 'accdb')."
         }
 
     - name: Build Access database
