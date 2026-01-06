@@ -141,7 +141,7 @@ def main():
             )
 
         conn.close()
-        print(f"✔ {db_path} successfully created and populated")
+        print(f"OK: {db_path} successfully created and populated")
     except Exception as e:
         print(f"ERROR during database population: {e}")
         sys.exit(1)
