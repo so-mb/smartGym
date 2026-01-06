@@ -29,13 +29,13 @@ jobs:
         $drivers = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))"
         Write-Host "pyodbc.drivers():"
         if ($drivers) {
-          $drivers.Split(\"`n\") | ForEach-Object { Write-Host \" - $_\" }
+          ($drivers -split "`r?`n") | Where-Object { $_ -and $_.Trim() -ne "" } | ForEach-Object { Write-Host " - $_" }
         } else {
           Write-Host " - (none)"
         }
         $hasAccdb = $false
         if ($drivers) {
-          $hasAccdb = $drivers.ToLower().Contains(\"accdb\")
+          $hasAccdb = $drivers.ToLower().Contains("accdb")
         }
         if ($hasAccdb) {
           Write-Host "Found an ACCDB-capable ODBC driver (name contains 'accdb')."
