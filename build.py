@@ -17,10 +17,26 @@ def create_access_database(db_path):
 
         abs_path = os.path.abspath(db_path)
 
-        # For .mdb builds, many environments can create the file implicitly when connecting via ODBC.
+        # For .mdb builds, the ODBC driver typically CANNOT create the file.
+        # Create an empty .mdb first using ADOX + Jet OLEDB provider (32-bit).
         if abs_path.lower().endswith(".mdb"):
-            print("Using .mdb; will let ODBC create/populate the file if possible.")
-            return True
+            try:
+                import win32com.client  # type: ignore
+
+                catalog = win32com.client.Dispatch("ADOX.Catalog")
+                # Jet OLEDB provider for .mdb
+                # Engine Type=5 => Access 2000 format (widely compatible)
+                conn_str = (
+                    "Provider=Microsoft.Jet.OLEDB.4.0;"
+                    f"Data Source={abs_path};"
+                    "Jet OLEDB:Engine Type=5;"
+                )
+                catalog.Create(conn_str)
+                print(f"Created new Access database using Jet ADOX: {db_path}")
+                return True
+            except Exception as jet_err:
+                print(f"Jet ADOX method failed for .mdb: {jet_err}")
+                # Fall through to other methods (may still work on some machines)
 
         # Method 1: pure Python (no COM). Requires `msaccessdb` (accdb).
         try:
