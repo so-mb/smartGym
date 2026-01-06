@@ -20,78 +20,87 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-        pip install pyodbc pywin32
+        pip install pyodbc pywin32 msaccessdb
 
-    - name: Check if Access Database Engine is installed
+    - name: Check if Access Database Engine (ACCDB) is installed
       id: check_driver
       run: |
-        $drivers = Get-OdbcDriver | Where-Object { $_.Name -like "*Access*" }
-        if ($drivers) {
-          Write-Host "Access Database Engine driver found: $($drivers.Name -join ', ')"
-          Write-Host "driver_installed=true" >> $env:GITHUB_OUTPUT
+        $drivers = Get-OdbcDriver | Select-Object -ExpandProperty Name
+        $hasAccdbOdbc = $drivers -contains "Microsoft Access Driver (*.mdb, *.accdb)"
+        if ($hasAccdbOdbc) {
+          Write-Host "Found ODBC driver: Microsoft Access Driver (*.mdb, *.accdb)"
+          Write-Host "accdb_driver_installed=true" >> $env:GITHUB_OUTPUT
         } else {
-          Write-Host "Access Database Engine driver not found, will install"
-          Write-Host "driver_installed=false" >> $env:GITHUB_OUTPUT
+          Write-Host "ACCDB-capable Access ODBC driver not found. Present drivers:"
+          $drivers | ForEach-Object { Write-Host " - $_" }
+          Write-Host "accdb_driver_installed=false" >> $env:GITHUB_OUTPUT
         }
 
     - name: Install Microsoft Access Database Engine
-      if: steps.check_driver.outputs.driver_installed == 'false'
+      if: steps.check_driver.outputs.accdb_driver_installed == 'false'
       run: |
         $ErrorActionPreference = "Stop"
-        Write-Host "Downloading Access Database Engine..."
-        
-        # Try multiple known working URLs (Microsoft changes these periodically)
+        Write-Host "Installing Access Database Engine (ACE) for *.accdb support..."
+
+        # Prefer winget because Microsoft direct links are brittle (and often 404 over time).
+        $winget = Get-Command winget -ErrorAction SilentlyContinue
+        if ($winget) {
+          Write-Host "winget detected. Searching for Access Database Engine..."
+          try {
+            $json = winget search "Access Database Engine" --source winget --output json | Out-String
+            $data = $json | ConvertFrom-Json
+            $pkg = $data.Data | Where-Object { $_.Name -match "Access Database Engine" } | Select-Object -First 1
+            if ($pkg -and $pkg.Id) {
+              Write-Host "Installing via winget: $($pkg.Name) ($($pkg.Id))"
+              winget install --id $pkg.Id --silent --accept-package-agreements --accept-source-agreements
+            } else {
+              Write-Host "winget search returned no matching package; falling back to direct download."
+              throw "winget package not found"
+            }
+          } catch {
+            Write-Host "winget install failed: $_"
+          }
+        } else {
+          Write-Host "winget not available; falling back to direct download."
+        }
+
+        # Re-check after winget attempt
+        $driversAfter = Get-OdbcDriver | Select-Object -ExpandProperty Name
+        if ($driversAfter -contains "Microsoft Access Driver (*.mdb, *.accdb)") {
+          Write-Host "ACCDB-capable ODBC driver is now installed."
+          exit 0
+        }
+
+        Write-Host "Attempting direct download install as fallback..."
         $urls = @(
           "https://download.microsoft.com/download/3/5/C/35C84A0E-DC6E-4EBC-AE0B-1D3B78B99A4A/accessdatabaseengine_X64.exe",
-          "https://download.microsoft.com/download/3/5/C/35C84A0E-DC6E-4EBC-AE0B-1D3B78B99A4A/AccessDatabaseEngine_X64.exe"
+          "https://download.microsoft.com/download/3/5/C/35C84A0E-DC6E-4EBC-AE0B-1D3B78B99A4A/AccessDatabaseEngine_X64.exe",
+          "https://www.microsoft.com/en-us/download/confirmation.aspx?id=54920"
         )
-        
         $downloaded = $false
         foreach ($url in $urls) {
           try {
             Write-Host "Trying URL: $url"
             Invoke-WebRequest -Uri $url -OutFile AccessDatabaseEngine.exe -ErrorAction Stop
-            Write-Host "Download successful from: $url"
             $downloaded = $true
             break
           } catch {
             Write-Host "Failed: $_"
-            continue
           }
         }
-        
-        if (-not $downloaded) {
-          Write-Host "Direct downloads failed, trying to parse Microsoft download page..."
-          $pageUrl = "https://www.microsoft.com/en-us/download/details.aspx?id=54920"
-          try {
-            $response = Invoke-WebRequest -Uri $pageUrl -UseBasicParsing
-            # Look for download links in the page
-            $matches = [regex]::Matches($response.Content, 'href="([^"]*[Aa]ccess[Dd]atabase[Ee]ngine[^"]*\.exe[^"]*)"')
-            if ($matches.Count -gt 0) {
-              $downloadLink = $matches[0].Groups[1].Value
-              if (-not $downloadLink.StartsWith("http")) {
-                $downloadLink = "https://www.microsoft.com" + $downloadLink
-              }
-              Write-Host "Found download link: $downloadLink"
-              Invoke-WebRequest -Uri $downloadLink -OutFile AccessDatabaseEngine.exe -ErrorAction Stop
-              $downloaded = $true
-            }
-          } catch {
-            Write-Host "Failed to parse download page: $_"
-          }
-        }
-        
-        if (-not $downloaded) {
-          throw "Could not download Access Database Engine from any source"
-        }
-        
-        Write-Host "Installing Access Database Engine (this may take a minute)..."
-        $process = Start-Process -FilePath .\AccessDatabaseEngine.exe -ArgumentList "/quiet" -Wait -PassThru
-        # Exit code 3010 means success but reboot required (common for drivers)
-        if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) {
-          Write-Warning "Installation exit code: $($process.ExitCode) (3010 is OK for reboot required)"
+        if (-not $downloaded) { throw "Could not download Access Database Engine." }
+
+        Write-Host "Installing Access Database Engine..."
+        $p = Start-Process -FilePath .\AccessDatabaseEngine.exe -ArgumentList "/quiet" -Wait -PassThru
+        Write-Host "Installer exit code: $($p.ExitCode)"
+
+        $driversFinal = Get-OdbcDriver | Select-Object -ExpandProperty Name
+        if ($driversFinal -contains "Microsoft Access Driver (*.mdb, *.accdb)") {
+          Write-Host "ACCDB-capable ODBC driver installed successfully."
         } else {
-          Write-Host "Installation completed successfully"
+          Write-Host "Still missing ACCDB driver after install. Drivers now:"
+          $driversFinal | ForEach-Object { Write-Host " - $_" }
+          throw "ACCDB-capable ODBC driver not installed."
         }
 
     - name: Build Access database

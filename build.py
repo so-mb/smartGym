@@ -5,16 +5,32 @@ import sys
 
 
 def create_access_database(db_path):
-    """Create a new Access database file using ADO (ActiveX Data Objects)"""
+    """Create a new Access database file.
+
+    Important: GitHub-hosted runners often *do not* have Microsoft Access installed,
+    so Access.Application COM automation is not available. Prefer pure-Python creation
+    (msaccessdb) or ADOX if ACE components are installed.
+    """
+
     try:
-        import win32com.client
         import os
 
-        # Get absolute path
         abs_path = os.path.abspath(db_path)
 
-        # Method 1: Try using ADOX.Catalog (works with Access Database Engine, no full Access needed)
+        # Method 1: pure Python (no COM). Requires `msaccessdb`.
         try:
+            import msaccessdb  # type: ignore
+
+            msaccessdb.create(abs_path)
+            print(f"Created new Access database using msaccessdb: {db_path}")
+            return True
+        except Exception as ms_err:
+            print(f"msaccessdb method failed (will try COM-based methods): {ms_err}")
+
+        # Method 2: Try using ADOX.Catalog (works with Access Database Engine, no full Access needed)
+        try:
+            import win32com.client  # type: ignore
+
             catalog = win32com.client.Dispatch("ADOX.Catalog")
             # Use ACE OLEDB provider (comes with Access Database Engine)
             # Try both 12.0 and 16.0 providers
@@ -37,8 +53,10 @@ def create_access_database(db_path):
 
         except Exception as adox_error:
             print(f"ADOX method failed: {adox_error}")
-            # Method 2: Fallback to Access.Application (requires full Access, won't work on GitHub Actions)
+            # Method 3: Fallback to Access.Application (requires full Access, won't work on GitHub Actions)
             try:
+                import win32com.client  # type: ignore
+
                 access = win32com.client.Dispatch("Access.Application")
                 access.NewCurrentDatabase(abs_path)
                 access.Quit()
