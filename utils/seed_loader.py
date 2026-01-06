@@ -1,5 +1,59 @@
 import csv
+from datetime import datetime
 from config import ENCODING
+
+
+def _blank_to_none(v):
+    if v is None:
+        return None
+    if isinstance(v, str) and v.strip() == "":
+        return None
+    return v
+
+
+def _to_int(v):
+    v = _blank_to_none(v)
+    if v is None:
+        return None
+    try:
+        return int(v)
+    except Exception:
+        return v
+
+
+def _to_float(v):
+    v = _blank_to_none(v)
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except Exception:
+        return v
+
+
+def _to_bool_yesno(v):
+    v = _blank_to_none(v)
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return v
+    s = str(v).strip().lower()
+    if s in ("yes", "y", "true", "1", "-1"):
+        return True
+    if s in ("no", "n", "false", "0"):
+        return False
+    return v
+
+
+def _to_datetime(v):
+    v = _blank_to_none(v)
+    if v is None:
+        return None
+    try:
+        # Handles both 'YYYY-MM-DD' and 'YYYY-MM-DD HH:MM:SS'
+        return datetime.fromisoformat(str(v).strip())
+    except Exception:
+        return v
 
 
 def load_csv_simple(conn, table_name, csv_path):
@@ -48,10 +102,10 @@ def load_seed_data(conn):
                     row["FirstName"],
                     row["LastName"],
                     row["Email"],
-                    row.get("Phone", ""),
-                    row.get("DateOfBirth", ""),
-                    row.get("JoinDate", ""),
-                    row.get("Status", ""),
+                    _blank_to_none(row.get("Phone")),
+                    _to_datetime(row.get("DateOfBirth")),
+                    _to_datetime(row.get("JoinDate")),
+                    _blank_to_none(row.get("Status")),
                 ],
             )
             member_id = get_id_by_key(
@@ -72,21 +126,21 @@ def load_seed_data(conn):
                 "INSERT INTO MembershipPlans (PlanName, DurationMonths, MonthlyFee, IncludesPTSessions) VALUES (?, ?, ?, ?)",
                 [
                     row["PlanName"],
-                    row.get("DurationMonths", ""),
-                    row.get("MonthlyFee", ""),
-                    row.get("IncludesPTSessions", "No"),
+                    _to_int(row.get("DurationMonths")),
+                    _to_float(row.get("MonthlyFee")),
+                    _to_bool_yesno(row.get("IncludesPTSessions", "No")),
                 ],
             )
-            plan_id = get_id_by_key(
-                conn, "MembershipPlans", "PlanName", row["PlanName"], "PlanID"
-            )
-            if plan_id:
-                plan_name_map[row["PlanName"]] = plan_id
+            # PlanName isn't unique in the seed (e.g. Basic 1 month vs Basic 6 months),
+            # so we don't build a PlanName -> PlanID map here.
 
     print("  Loading MemberMemberships...")
     # CSV has MemberID and PlanID as 1-based indices, need to map to actual IDs
     member_list = sorted(member_email_map.values())
-    plan_list = sorted(plan_name_map.values())
+    # Plan IDs are deterministic by insertion order (AUTOINCREMENT starts at 1).
+    cursor = conn.cursor()
+    cursor.execute("SELECT PlanID FROM MembershipPlans ORDER BY PlanID")
+    plan_list = [r[0] for r in cursor.fetchall()]
 
     membership_id_map = {}  # old_mm_index -> new MemberMembershipID
     with open("seed/member_memberships.csv", newline="", encoding=ENCODING) as f:
@@ -107,10 +161,10 @@ def load_seed_data(conn):
                         [
                             member_list[member_idx],
                             plan_list[plan_idx],
-                            row.get("StartDate", ""),
-                            row.get("EndDate", ""),
-                            row.get("Status", ""),
-                            row.get("CancelReason", ""),
+                            _to_datetime(row.get("StartDate")),
+                            _to_datetime(row.get("EndDate")),
+                            _blank_to_none(row.get("Status")),
+                            _blank_to_none(row.get("CancelReason")),
                         ],
                     )
                     # Get the generated ID
@@ -138,10 +192,10 @@ def load_seed_data(conn):
                         "INSERT INTO Payments (MemberMembershipID, Amount, PaidOn, Method, Status) VALUES (?, ?, ?, ?, ?)",
                         [
                             new_mm_id,
-                            row["Amount"],
-                            row.get("PaidOn", ""),
-                            row.get("Method", ""),
-                            row.get("Status", ""),
+                            _to_float(row.get("Amount")),
+                            _to_datetime(row.get("PaidOn")),
+                            _blank_to_none(row.get("Method")),
+                            _blank_to_none(row.get("Status")),
                         ],
                     )
             except (ValueError, KeyError):
@@ -159,10 +213,10 @@ def load_seed_data(conn):
                 "INSERT INTO Exercises (Name, MuscleGroup, EquipmentType, Difficulty, VideoURL) VALUES (?, ?, ?, ?, ?)",
                 [
                     row["Name"],
-                    row.get("MuscleGroup", ""),
-                    row.get("EquipmentType", ""),
-                    row.get("Difficulty", ""),
-                    row.get("VideoURL", ""),
+                    _blank_to_none(row.get("MuscleGroup")),
+                    _blank_to_none(row.get("EquipmentType")),
+                    _to_int(row.get("Difficulty")),
+                    _blank_to_none(row.get("VideoURL")),
                 ],
             )
             ex_id = get_id_by_key(conn, "Exercises", "Name", row["Name"], "ExerciseID")
@@ -179,7 +233,11 @@ def load_seed_data(conn):
                 continue
             cursor.execute(
                 "INSERT INTO WorkoutPlans (PlanName, GoalType, Level) VALUES (?, ?, ?)",
-                [row["PlanName"], row.get("GoalType", ""), row.get("Level", "")],
+                [
+                    row["PlanName"],
+                    _blank_to_none(row.get("GoalType")),
+                    _blank_to_none(row.get("Level")),
+                ],
             )
             wp_id = get_id_by_key(
                 conn, "WorkoutPlans", "PlanName", row["PlanName"], "PlanTemplateID"
@@ -207,12 +265,12 @@ def load_seed_data(conn):
                         [
                             workout_plan_list[plan_idx],
                             exercise_list[ex_idx],
-                            row.get("DayNumber", ""),
-                            row.get("SortOrder", ""),
-                            row.get("TargetSets", ""),
-                            row.get("TargetRepsMin", ""),
-                            row.get("TargetRepsMax", ""),
-                            row.get("TargetRPE", ""),
+                            _to_int(row.get("DayNumber")),
+                            _to_int(row.get("SortOrder")),
+                            _to_int(row.get("TargetSets")),
+                            _to_int(row.get("TargetRepsMin")),
+                            _to_int(row.get("TargetRepsMax")),
+                            _to_float(row.get("TargetRPE")),
                         ],
                     )
             except (ValueError, IndexError):
@@ -234,10 +292,10 @@ def load_seed_data(conn):
                         "INSERT INTO TrainingSessions (MemberID, SessionDateTime, DurationMinutes, SessionType, Notes) VALUES (?, ?, ?, ?, ?)",
                         [
                             member_list[member_idx],
-                            row.get("SessionDateTime", ""),
-                            row.get("DurationMinutes", ""),
-                            row.get("SessionType", ""),
-                            row.get("Notes", ""),
+                            _to_datetime(row.get("SessionDateTime")),
+                            _to_int(row.get("DurationMinutes")),
+                            _blank_to_none(row.get("SessionType")),
+                            _blank_to_none(row.get("Notes")),
                         ],
                     )
                     cursor.execute("SELECT MAX(SessionID) FROM TrainingSessions")
@@ -266,7 +324,7 @@ def load_seed_data(conn):
                         [
                             new_session_id,
                             exercise_list[ex_idx],
-                            row.get("SortOrder", ""),
+                            _to_int(row.get("SortOrder")),
                         ],
                     )
                     cursor.execute(
@@ -293,11 +351,11 @@ def load_seed_data(conn):
                         "INSERT INTO SetLogs (SessionExerciseID, SetNumber, Reps, WeightKg, RPE, IsPR) VALUES (?, ?, ?, ?, ?, ?)",
                         [
                             new_se_id,
-                            row.get("SetNumber", ""),
-                            row.get("Reps", ""),
-                            row.get("WeightKg", ""),
-                            row.get("RPE", ""),
-                            row.get("IsPR", "No"),
+                            _to_int(row.get("SetNumber")),
+                            _to_int(row.get("Reps")),
+                            _to_float(row.get("WeightKg")),
+                            _to_float(row.get("RPE")),
+                            _to_bool_yesno(row.get("IsPR", "No")),
                         ],
                     )
             except (ValueError, KeyError):
@@ -317,12 +375,12 @@ def load_seed_data(conn):
                         "INSERT INTO BodyMetrics (MemberID, MeasuredOn, WeightKg, BodyFatPct, ChestCm, WaistCm, HipCm) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         [
                             member_list[member_idx],
-                            row.get("MeasuredOn", ""),
-                            row.get("WeightKg", ""),
-                            row.get("BodyFatPct", ""),
-                            row.get("ChestCm", ""),
-                            row.get("WaistCm", ""),
-                            row.get("HipCm", ""),
+                            _to_datetime(row.get("MeasuredOn")),
+                            _to_float(row.get("WeightKg")),
+                            _to_float(row.get("BodyFatPct")),
+                            _to_float(row.get("ChestCm")),
+                            _to_float(row.get("WaistCm")),
+                            _to_float(row.get("HipCm")),
                         ],
                     )
             except (ValueError, IndexError):
@@ -342,11 +400,11 @@ def load_seed_data(conn):
                         "INSERT INTO Goals (MemberID, GoalType, TargetValue, StartDate, TargetDate, Status) VALUES (?, ?, ?, ?, ?, ?)",
                         [
                             member_list[member_idx],
-                            row.get("GoalType", ""),
-                            row.get("TargetValue", ""),
-                            row.get("StartDate", ""),
-                            row.get("TargetDate", ""),
-                            row.get("Status", ""),
+                            _blank_to_none(row.get("GoalType")),
+                            _to_float(row.get("TargetValue")),
+                            _to_datetime(row.get("StartDate")),
+                            _to_datetime(row.get("TargetDate")),
+                            _blank_to_none(row.get("Status")),
                         ],
                     )
             except (ValueError, IndexError):
@@ -371,9 +429,9 @@ def load_seed_data(conn):
                         "INSERT INTO Recommendations (MemberID, CreatedOn, RecommendationType, ReasonText, RelatedExerciseID) VALUES (?, ?, ?, ?, ?)",
                         [
                             member_list[member_idx],
-                            row.get("CreatedOn", ""),
-                            row.get("RecommendationType", ""),
-                            row.get("ReasonText", ""),
+                            _to_datetime(row.get("CreatedOn")),
+                            _blank_to_none(row.get("RecommendationType")),
+                            _blank_to_none(row.get("ReasonText")),
                             related_ex_id,
                         ],
                     )
