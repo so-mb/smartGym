@@ -5,15 +5,51 @@ import sys
 
 
 def create_access_database(db_path):
-    """Create a new Access database file using COM automation (Windows only)"""
+    """Create a new Access database file using ADO (ActiveX Data Objects)"""
     try:
         import win32com.client
+        import os
 
-        access = win32com.client.Dispatch("Access.Application")
-        access.NewCurrentDatabase(db_path)
-        access.Quit()
-        print(f"Created new Access database: {db_path}")
-        return True
+        # Get absolute path
+        abs_path = os.path.abspath(db_path)
+
+        # Method 1: Try using ADOX.Catalog (works with Access Database Engine, no full Access needed)
+        try:
+            catalog = win32com.client.Dispatch("ADOX.Catalog")
+            # Use ACE OLEDB provider (comes with Access Database Engine)
+            # Try both 12.0 and 16.0 providers
+            providers = [
+                "Provider=Microsoft.ACE.OLEDB.16.0;Data Source={};",
+                "Provider=Microsoft.ACE.OLEDB.12.0;Data Source={};",
+            ]
+
+            for provider_template in providers:
+                try:
+                    conn_str = provider_template.format(abs_path)
+                    catalog.Create(conn_str)
+                    print(f"Created new Access database using ADOX: {db_path}")
+                    return True
+                except Exception as provider_error:
+                    print(f"Tried provider, failed: {provider_error}")
+                    continue
+
+            raise Exception("All ADOX providers failed")
+
+        except Exception as adox_error:
+            print(f"ADOX method failed: {adox_error}")
+            # Method 2: Fallback to Access.Application (requires full Access, won't work on GitHub Actions)
+            try:
+                access = win32com.client.Dispatch("Access.Application")
+                access.NewCurrentDatabase(abs_path)
+                access.Quit()
+                print(
+                    f"Created new Access database using Access.Application: {db_path}"
+                )
+                return True
+            except Exception as access_error:
+                print(f"Access.Application method also failed: {access_error}")
+                raise adox_error
+
     except ImportError:
         print("ERROR: win32com not available. Install pywin32: pip install pywin32")
         return False
