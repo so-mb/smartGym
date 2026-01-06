@@ -1,0 +1,53 @@
+name: Build smartGym Access Database
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-access-db:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        pip install pyodbc pywin32
+
+    - name: Install Microsoft Access Database Engine
+      run: |
+        $ErrorActionPreference = "Stop"
+        Write-Host "Downloading Access Database Engine..."
+        Invoke-WebRequest `
+          -Uri https://download.microsoft.com/download/3/5/C/35C84A0E-DC6E-4EBC-AE0B-1D3B78B99A4A/AccessDatabaseEngine_X64.exe `
+          -OutFile AccessDatabaseEngine.exe
+        Write-Host "Installing Access Database Engine (this may take a minute)..."
+        $process = Start-Process -FilePath .\AccessDatabaseEngine.exe -ArgumentList "/quiet" -Wait -PassThru
+        Write-Host "Access Database Engine installation completed (exit code: $($process.ExitCode))"
+
+    - name: Build Access database
+      run: |
+        python build.py
+      working-directory: .
+
+    - name: Verify database file exists
+      run: |
+        if (-not (Test-Path "smart_gym.accdb")) {
+          Write-Error "Database file was not created!"
+          exit 1
+        }
+        Write-Host "Database file created successfully: $(Get-Item smart_gym.accdb | Select-Object -ExpandProperty Length) bytes"
+
+    - name: Upload Access database artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: smart-gym-access-db
+        path: smart_gym.accdb

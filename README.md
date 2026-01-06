@@ -131,6 +131,10 @@ smart-gym-db/
 │   ├── db.py               # Database connection utilities
 │   └── seed_loader.py      # CSV data loader
 │
+├─ .github/
+│   └─ workflows/
+│       └─ build-access-db.yml
+│
 └── README.md
 ```
 
