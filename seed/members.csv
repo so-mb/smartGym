@@ -1,0 +1,7 @@
+FirstName,LastName,Email,Phone,DateOfBirth,JoinDate,Status
+Alice,Müller,alice.mueller@example.com,+491234567890,1990-05-15,2024-01-10,Active
+Ben,Schmidt,ben.schmidt@example.com,+491234567891,1985-08-22,2024-02-01,Active
+Clara,Fischer,clara.fischer@example.com,+491234567892,1992-11-30,2024-03-05,Frozen
+David,Weber,david.weber@example.com,+491234567893,1988-03-18,2024-01-20,Active
+Emma,Wagner,emma.wagner@example.com,+491234567894,1995-07-12,2024-02-15,Active
+Frank,Becker,frank.becker@example.com,+491234567895,1991-09-25,2023-12-01,Cancelled

@@ -1,0 +1,11 @@
+MemberMembershipID,Amount,PaidOn,Method,Status
+1,49.99,2024-01-10,Card,Paid
+1,49.99,2024-02-10,Card,Paid
+1,49.99,2024-03-10,Card,Paid
+2,29.99,2024-02-01,SEPA,Paid
+3,49.99,2024-03-05,Card,Paid
+4,79.99,2024-01-20,Card,Paid
+4,79.99,2024-02-20,Card,Paid
+4,79.99,2024-03-20,Card,Paid
+5,49.99,2024-02-15,Card,Paid
+6,29.99,2023-12-01,Card,Paid

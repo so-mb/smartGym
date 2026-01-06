@@ -1,0 +1,13 @@
+Name,MuscleGroup,EquipmentType,Difficulty,VideoURL
+Bench Press,Chest,Barbell,4,https://example.com/bench-press
+Squat,Legs,Barbell,5,https://example.com/squat
+Deadlift,Back,Barbell,5,https://example.com/deadlift
+Pull-Up,Back,Bodyweight,4,https://example.com/pull-up
+Overhead Press,Shoulders,Barbell,4,https://example.com/ohp
+Barbell Row,Back,Barbell,3,https://example.com/row
+Leg Press,Legs,Machine,2,https://example.com/leg-press
+Chest Fly,Chest,Dumbbell,3,https://example.com/fly
+Bicep Curl,Arms,Dumbbell,2,https://example.com/curl
+Tricep Extension,Arms,Dumbbell,2,https://example.com/tricep
+Running,Cardio,Bodyweight,2,https://example.com/running
+Cycling,Cardio,Machine,2,https://example.com/cycling

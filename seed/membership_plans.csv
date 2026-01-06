@@ -1,0 +1,7 @@
+PlanName,DurationMonths,MonthlyFee,IncludesPTSessions
+Basic,1,29.99,No
+Premium,1,49.99,No
+PT Bundle,1,79.99,Yes
+Basic,6,24.99,No
+Premium,6,44.99,No
+PT Bundle,6,74.99,Yes

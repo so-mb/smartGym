@@ -1,0 +1,7 @@
+MemberID,PlanID,StartDate,EndDate,Status,CancelReason
+1,2,2024-01-10,2025-01-10,Active,
+2,1,2024-02-01,2024-03-01,Active,
+3,2,2024-03-05,2024-04-05,Frozen,
+4,3,2024-01-20,2024-07-20,Active,
+5,2,2024-02-15,2024-03-15,Active,
+1,1,2023-12-01,2024-01-01,Expired,

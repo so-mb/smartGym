@@ -1,0 +1,7 @@
+MemberID,CreatedOn,RecommendationType,ReasonText,RelatedExerciseID
+1,2024-03-12,IncreaseLoad,Progressing well on bench press, consider increasing weight,1
+1,2024-03-12,MoreCardio,Add more cardio sessions for better conditioning,
+2,2024-03-08,Deload,Plateau detected on squat, consider deload week,2
+4,2024-03-25,IncreaseLoad,Strong progress on deadlift, ready for more weight,3
+4,2024-03-25,Recover,Consider rest day after intense training,
+5,2024-02-20,MoreCardio,Increase cardio for weight loss goal,
