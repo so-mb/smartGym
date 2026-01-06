@@ -27,16 +27,15 @@ jobs:
       id: check_driver
       run: |
         $ErrorActionPreference = "Stop"
-        $drivers = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))"
+        $drivers = python -c "import pyodbc; print('\n'.join(pyodbc.drivers()))" | Out-String
+        $driversText = $drivers.ToLower()
         Write-Host "pyodbc.drivers():"
         if ($drivers) {
           ($drivers -split "`r?`n") | Where-Object { $_ -and $_.Trim() -ne "" } | ForEach-Object { Write-Host " - $_" }
         } else {
           Write-Host " - (none)"
         }
-        $hasMdb = $false
-        if ($drivers) { $hasMdb = $drivers.ToLower().Contains("*.mdb") -or $drivers.ToLower().Contains("access") }
-        if ($hasMdb) {
+        if ($driversText -match "access" -and $driversText -match "\*\.mdb") {
           Write-Host "Found an Access ODBC driver (sufficient for .mdb build)."
         } else {
           throw "No Access ODBC driver detected by pyodbc. This runner cannot build even .mdb via ODBC."

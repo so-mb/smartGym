@@ -17,7 +17,12 @@ def create_access_database(db_path):
 
         abs_path = os.path.abspath(db_path)
 
-        # Method 1: pure Python (no COM). Requires `msaccessdb`.
+        # For .mdb builds, many environments can create the file implicitly when connecting via ODBC.
+        if abs_path.lower().endswith(".mdb"):
+            print("Using .mdb; will let ODBC create/populate the file if possible.")
+            return True
+
+        # Method 1: pure Python (no COM). Requires `msaccessdb` (accdb).
         try:
             import msaccessdb  # type: ignore
 

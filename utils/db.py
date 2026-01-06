@@ -8,12 +8,21 @@ def connect():
     db_path = os.path.abspath(DB_FILE)
 
     drivers = pyodbc.drivers()
-    # Prefer an ACCDB-capable driver
+    # Prefer an ACCDB-capable driver (if building .accdb)
     preferred = None
-    for d in drivers:
-        if "accdb" in d.lower():
-            preferred = d
-            break
+    lower_db = DB_FILE.lower()
+    if lower_db.endswith(".accdb"):
+        for d in drivers:
+            if "accdb" in d.lower():
+                preferred = d
+                break
+    elif lower_db.endswith(".mdb"):
+        # GitHub runners often only have the older Access/Jet *.mdb driver (sometimes localized)
+        for d in drivers:
+            dl = d.lower()
+            if "access" in dl and "mdb" in dl:
+                preferred = d
+                break
 
     # Fall back to the configured connection string if it matches the environment
     if preferred is None:
@@ -21,7 +30,9 @@ def connect():
             return pyodbc.connect(ODBC_CONNECTION_STRING, autocommit=True)
         except Exception as e:
             raise RuntimeError(
-                "No ACCDB-capable ODBC driver found. pyodbc.drivers() = "
+                "No suitable Access ODBC driver found for "
+                + DB_FILE
+                + ". pyodbc.drivers() = "
                 + repr(drivers)
                 + "\nOriginal error: "
                 + str(e)
